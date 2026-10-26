@@ -122,6 +122,17 @@ def run_benchmark(bot_script_path, num_games=100):
 
 
 if __name__ == "__main__":
+    target_bot = "bots/chatgpt.py"
+    run_benchmark(target_bot, num_games=15000)
     target_bot = "bots/claude.py"
-
-    run_benchmark(target_bot, num_games=1000)
+    run_benchmark(target_bot, num_games=15000)
+    target_bot = "bots/deepseek.py"
+    run_benchmark(target_bot, num_games=15000)
+    target_bot = "bots/gemini.py"
+    run_benchmark(target_bot, num_games=15000)
+    target_bot = "bots/gwen.py"
+    run_benchmark(target_bot, num_games=15000)
+    target_bot = "bots/hunter.py"
+    run_benchmark(target_bot, num_games=15000)
+    target_bot = "bots/random_bot.py"
+    run_benchmark(target_bot, num_games=15000)
