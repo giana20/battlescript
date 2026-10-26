@@ -24,11 +24,7 @@ def run_single_solo_game(bot_script_path):
   try:
     while turns < max_turns and not board.all_ships_sunk():
       turns += 1
-
       # Ask the real bot script for its turn via stdin
-      proc.stdin.write("YOUR_TURN\n")
-      proc.stdin.flush()
-      
       result = "INVALID"
 
       # Read its coordinate response from stdout
@@ -38,10 +34,14 @@ def run_single_solo_game(bot_script_path):
             move_line = proc.stdout.readline().strip()
 
             # Process shot on opponent's board
-            
             col = ord(move_line[0]) - ord("A")
             row = int(move_line[1:]) - 1
             result = board.receive_shot(row, col)
+            
+      
+      print(f"bot fires at {move_line} ➔ Result: {result}")
+      proc.stdin.write(f"RESULT:{result}\n")
+      proc.stdin.flush()
 
       # Process shot on the secret benchmark board
       board.receive_shot(row, col)
@@ -108,7 +108,6 @@ def run_benchmark(bot_script_path, num_games=100):
 
 
 if __name__ == "__main__":
-  target_bot = "bots/random_bot.py"
+  target_bot = "bots/gwen.py"
   
-  # Run 100 games (you can increase this to 500 or 1000 once you make a smarter bot)
   run_benchmark(target_bot, num_games=1000)

@@ -1,8 +1,10 @@
+import os
 import subprocess
 import sys
 import time
 from engine.board import Board
 import pygame
+from pathlib import Path
 
 
 class BattleshipReferee:
@@ -10,6 +12,8 @@ class BattleshipReferee:
     def __init__(self, bot_1_script_path, bot_2_script_path):
         self.bot_1_path = bot_1_script_path
         self.bot_2_path = bot_2_script_path
+        self.bot1_name = Path(bot_1_script_path).stem
+        self.bot2_name = Path(bot_2_script_path).stem
         self.bot1 = None
         self.bot2 = None
         self.board_bot_1 = Board()
@@ -17,13 +21,18 @@ class BattleshipReferee:
         self.board_bot_2 = Board()
         self.board_bot_2.place_fleet_randomly()
 
+        # Where each bot's own "brain" window opens (x,y in screen pixels).
+        # Tweak these for your monitor.
+        self.BOT_WINDOW_POS = ("860,40", "1280,40")
+
         # --- Pygame Setup ---
         pygame.init()
+        self.font = pygame.font.SysFont("arial", 24, bold=True)
         self.WIDTH, self.HEIGHT = 800, 480
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Battleship Tournament - Initializing...")
         self.clock = pygame.time.Clock()
-        self.DELAY_BTW_SHOTS = 100
+        self.DELAY_BTW_SHOTS = 1000
 
         # Colors
         self.BG_COLOR = (30, 30, 35)
@@ -38,20 +47,21 @@ class BattleshipReferee:
         self.HIT_COLOR = (220, 50, 50)  # Vibrant red for hits
         self.MISS_COLOR = (100, 180, 255)  # Soft blue for misses
 
+    def _spawn(self, script_path, window_pos):
+        """Spawns a bot as a separate subprocess."""
+        env = os.environ.copy()
+        env["BOT_WINDOW_POS"] = window_pos
+        return subprocess.Popen(
+            [sys.executable, script_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
     def start_bots(self):
-        """Spawns the bot as a separate subprocess."""
-        self.bot1 = subprocess.Popen(
-            [sys.executable, self.bot_1_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        self.bot2 = subprocess.Popen(
-            [sys.executable, self.bot_2_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
+        self.bot1 = self._spawn(self.bot_1_path, self.BOT_WINDOW_POS[0])
+        self.bot2 = self._spawn(self.bot_2_path, self.BOT_WINDOW_POS[1])
 
     def play_turn(self, attacker_proc, defender_board, attacker_name):
         """Executes a single turn for a bot."""
@@ -63,12 +73,13 @@ class BattleshipReferee:
             move_line = attacker_proc.stdout.readline().strip()
 
             # Process shot on opponent's board
-            
             col = ord(move_line[0]) - ord("A")
             row = int(move_line[1:]) - 1
             result = defender_board.receive_shot(row, col)
 
         print(f"[{attacker_name}] fires at {move_line} ➔ Result: {result}")
+        attacker_proc.stdin.write(f"RESULT:{result}\n")
+        attacker_proc.stdin.flush()
         return move_line, result
 
     def run_game(self):
@@ -93,12 +104,12 @@ class BattleshipReferee:
                 # --- Player 1 Turn ---
                 print(f"\n--- Turn {turn_count} ---")
                 move1, res1 = self.play_turn(
-                    self.bot1, self.board_bot_2, "Bot 1 (Player 1)"
+                    self.bot1, self.board_bot_2, self.bot1_name
                 )
                 status = f"Turn {turn_count}: Bot 1 fires at {move1} -> {res1}"
                 self.render_frame(status)
                 if self.board_bot_2.all_ships_sunk():
-                    winner = "Bot 1 (Player 1)"
+                    winner = self.bot1_name
                     break
 
                 # Small delay for readable console output
@@ -106,12 +117,12 @@ class BattleshipReferee:
 
                 # --- Player 2 Turn ---
                 move2, res2 = self.play_turn(
-                    self.bot2, self.board_bot_1, "Bot 2 (Player 2)"
+                    self.bot2, self.board_bot_1, self.bot2_name
                 )
                 status = f"Turn {turn_count}: Bot 2 fires at {move2} -> {res2}"
                 self.render_frame(status)
                 if self.board_bot_1.all_ships_sunk():
-                    winner = "Bot 2 (Player 2)"
+                    winner = self.bot2_name
                     break
 
                 pygame.time.delay(self.DELAY_BTW_SHOTS)
@@ -153,6 +164,12 @@ class BattleshipReferee:
                 pygame.draw.rect(self.screen, color, rect)
                 pygame.draw.rect(self.screen, self.LINE_COLOR, rect, 1)
 
+    def draw_label(self, text, start_x, start_y):
+        """Draws a centered label above a grid."""
+        grid_width = 10 * self.CELL_SIZE
+        label = self.font.render(text, True, (235, 235, 240))
+        label_rect = label.get_rect(center=(start_x + grid_width // 2, start_y - 20))
+        self.screen.blit(label, label_rect)
 
     def render_frame(self, status_text=""):
         """Redraws the boards and updates the window title status."""
@@ -167,6 +184,9 @@ class BattleshipReferee:
         self.draw_grid(self.MARGIN_X, self.MARGIN_Y, self.board_bot_1)
         self.draw_grid(self.MARGIN_X + 380, self.MARGIN_Y, self.board_bot_2)
 
+        self.draw_label(self.bot1_name, self.MARGIN_X, self.MARGIN_Y)
+        self.draw_label(self.bot2_name, self.MARGIN_X + 380, self.MARGIN_Y)
+
         # Display game status in the top window title bar
         pygame.display.set_caption(f"Battleship Tournament | {status_text}")
         pygame.display.flip()
@@ -175,8 +195,9 @@ class BattleshipReferee:
 MATCH_COUNT = 1
 
 if __name__ == "__main__":
-    bot_script = "bots/random_bot.py"
+    bot_1_script = "bots/chatgpt.py"
+    bot_2_script = "bots/claude.py"
     for match_number in range(1, MATCH_COUNT + 1):
         print(f"\n\n=== MATCH {match_number} ===")
-        match = BattleshipReferee(bot_script, bot_script)
+        match = BattleshipReferee(bot_1_script, bot_2_script)
         match.run_game()
