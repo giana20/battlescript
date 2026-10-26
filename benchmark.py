@@ -1,96 +1,114 @@
 import csv
-import random
+import subprocess
+import sys
 from pathlib import Path
 from engine.board import Board
 
-
-class RandomBotSimulator:
-  """A pure Python implementation of the Random Bot for fast solo simulation."""
-
-  def __init__(self):
-    self.reset()
-
-  def reset(self):
-    # Keep track of all available coordinates (0-9, 0-9) so it never repeats a shot
-    self.available_shots = [(r, c) for r in range(10) for c in range(10)]
-    random.shuffle(self.available_shots)
-
-  def get_next_move(self):
-    """Pops a random unshot coordinate."""
-    if not self.available_shots:
-      return None
-    return self.available_shots.pop()
-
-
-def run_single_game():
-  """Simulates one complete solo game until all ships are sunk."""
+def run_single_solo_game(bot_script_path):
+  """Spawns your actual bot script as a subprocess and plays a solo game."""
   board = Board()
   board.place_fleet_randomly()
 
-  bot = RandomBotSimulator()
+  # Launch the real bot script file as a subprocess
+  proc = subprocess.Popen(
+      [sys.executable, bot_script_path],
+      stdin=subprocess.PIPE,
+      stdout=subprocess.PIPE,
+      text=True,
+  )
+
   turns = 0
-  max_turns = 100  # Safety limit
+  max_turns = 200  # Safety limit
+  won = False
 
-  while turns < max_turns and not board.all_ships_sunk():
-    move = bot.get_next_move()
-    if not move:
-      break
+  try:
+    while turns < max_turns and not board.all_ships_sunk():
+      turns += 1
 
-    r, c = move
-    board.receive_shot(r, c)
-    turns += 1
+      # Ask the real bot script for its turn via stdin
+      proc.stdin.write("YOUR_TURN\n")
+      proc.stdin.flush()
+      
+      result = "INVALID"
 
-  won = board.all_ships_sunk()
-  return {
-      "total_turns": turns,
-      "win": won,
-  }
+      # Read its coordinate response from stdout
+      while result == "ALREADY_SHOT" or result == "INVALID":
+            proc.stdin.write("YOUR_TURN\n")
+            proc.stdin.flush()
+            move_line = proc.stdout.readline().strip()
+
+            # Process shot on opponent's board
+            
+            col = ord(move_line[0]) - ord("A")
+            row = int(move_line[1:]) - 1
+            result = board.receive_shot(row, col)
+
+      # Process shot on the secret benchmark board
+      board.receive_shot(row, col)
+
+      if board.all_ships_sunk():
+        won = True
+        break
+
+  finally:
+    # Clean up the bot process
+    proc.stdin.write("GAME_OVER\n")
+    proc.stdin.flush()
+    proc.terminate()
+    proc.wait()
+
+  return {"total_turns": turns, "win": won}
 
 
-def run_benchmark(num_games=1000):
-  bot_name = "RandomBot"
-  print(f"Starting solo benchmark: {num_games} games for [{bot_name}]...")
+def run_benchmark(bot_script_path, num_games=100):
+  bot_name = Path(bot_script_path).stem
+  print(
+      f"Benchmarking real script [{bot_script_path}] over {num_games}"
+      " games..."
+  )
+  print(
+      "   (Spawning subprocesses—this might take a couple of seconds for"
+      " 100+ games)"
+  )
 
-  # Ensure benchmarks directory exists
   results_dir = Path("benchmarks")
   results_dir.mkdir(exist_ok=True)
-  csv_file = results_dir / f"benchmark_{bot_name.lower()}.csv"
+  csv_file = results_dir / f"benchmark_{bot_name}.csv"
 
   total_turns_sum = 0
   wins_count = 0
 
-  # Open CSV file to save summary metrics
   with open(csv_file, mode="w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
-    # Write CSV Header
     writer.writerow(["game_id", "total_turns", "win"])
 
     for game_id in range(1, num_games + 1):
-      result = run_single_game()
+      result = run_single_solo_game(bot_script_path)
 
       total_turns_sum += result["total_turns"]
       if result["win"]:
         wins_count += 1
 
-      # Write row for this game
       writer.writerow(
           [game_id, result["total_turns"], "YES" if result["win"] else "NO"]
       )
 
-  # Calculate final analytics
+  # Analytics
   avg_turns = total_turns_sum / num_games
   win_rate = (wins_count / num_games) * 100
 
   print("\n========================================")
   print(f"BENCHMARK RESULTS FOR: {bot_name}")
   print("========================================")
-  print(f"Total Games Played: {num_games}")
+  print(f"Games Tested:       {num_games}")
   print(f"Win Rate:           {win_rate:.1f}%")
   print(f"Average Turns to Win: {avg_turns:.2f} turns")
-  print(f"Results saved to:   {csv_file}")
+  print(f"CSV Report Saved:   {csv_file}")
   print("========================================")
 
 
 if __name__ == "__main__":
-  # Run 1,000 solo games instantly
-  run_benchmark(num_games=1000)
+  target_bot = "bots/random_bot.py"
+  
+  # Run 100 games (you can increase this to 500 or 1000 once you make a smarter bot)
+  run_benchmark(target_bot, num_games=1000)
