@@ -63,7 +63,10 @@ class BattleshipReferee:
             move_line = attacker_proc.stdout.readline().strip()
 
             # Process shot on opponent's board
-            result = defender_board.receive_shot(move_line)
+            
+            col = ord(move_line[0]) - ord("A")
+            row = int(move_line[1:]) - 1
+            result = defender_board.receive_shot(row, col)
 
         print(f"[{attacker_name}] fires at {move_line} ➔ Result: {result}")
         return move_line, result

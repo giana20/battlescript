@@ -67,16 +67,12 @@ class Board:
 
         self.ships[ship_name] = {"coords": coords, "hits": 0}
         return True
-
-    def receive_shot(self, coord):
+        
+    def receive_shot(self, row, col):
         """Processes an incoming shot.
 
         Returns: 'MISS', 'HIT', 'SUNK:<ship_name>', 'ALREADY_SHOT', or 'INVALID'
         """
-        col = ord(coord[0]) - ord("A")
-        row = int(coord[1:]) - 1
-        
-        
         if not (0 <= row < self.size and 0 <= col < self.size):
             return "INVALID"
 
