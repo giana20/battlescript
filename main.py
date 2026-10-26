@@ -32,7 +32,7 @@ class BattleshipReferee:
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Battleship Tournament - Initializing...")
         self.clock = pygame.time.Clock()
-        self.DELAY_BTW_SHOTS = 1000
+        self.DELAY_BTW_SHOTS = 1
 
         # Colors
         self.BG_COLOR = (30, 30, 35)
